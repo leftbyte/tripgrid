@@ -1,3 +1,11 @@
+#!/usr/bin/env python
+
+##
+# celery.py -
+#
+#    Module defining the celery configuration.
+##
+
 from __future__ import absolute_import
 
 from celery import Celery

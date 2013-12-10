@@ -1,3 +1,12 @@
+#!/usr/bin/env python
+
+##
+# TripTasks.py -
+#
+#    Module defining the celery tasks used by the Trip generator and processed
+#    by the TripProcessor.
+##
+
 from __future__ import absolute_import
 
 from tripgrid.celery import app
