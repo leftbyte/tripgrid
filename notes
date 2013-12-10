@@ -1,0 +1,162 @@
+uber coding challenges:
+departure times
+
+create a web app that gives real-time departure time for public transportation
+(use freely available public api). the app should geolocalize the user. here are
+some examples of freely available data:
+- 511 (san francisco)
+- nextbus (san francisco)
+- sf movies
+
+create a web app that shows on a map where movies have been filmed in san
+francisco. the user should be able to filter the view using autocompletion
+search.
+- the data is available on datasf: film locations.
+
+bicycle parking: create a web app providing directions to the nearest bicycle parking.
+- the data is available on datasf: bicycle parking
+
+food trucks: create a web app that tells the user what types of food trucks
+might be found near a specific location. the main interface should be a map.
+
+- the data is available on datasf: food trucks
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+the first component will continuously generate trip data, issuing messages for
+the following events:
+
+ - trip begin (data: trip id, latitude, longitude)
+ - roughly once per second during a “trip” (data: trip id, latitude, longitude)
+ - trip end (data: trip id, latitude, longitude, dollar amount of fare)
+
+the second component will consume these events, store them in memory, and expose
+an interface for querying the data thusly stored. the queries we’d like to be
+able to answer are:
+
+ - how many trips passed through a given geo-rect (defined by four lat/long pairs).
+ - how many trips started or stopped within a given geo-rect, and the sum of their fares.
+ - how many trips were occurring at a given point in time.
+
+the two components can talk to each other however you see fit.
+
+some bounding conditions:
+ - assume a system with up to 500 concurrent trips at any given time.
+ - assume further that we require interactive query times.
+
+the purpose of this exercise is twofold. we’re interested in code style -
+clarity, structure, etc.  we’re also interested in how you approach the
+algorithmic issue of high insert volume with real- time query requirements. you
+can use whichever libraries you like, but keep in mind that we’re interested in
+your coding chops and this is an opportunity to show them off. use good
+judgement.
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+producer: javasript component in web page that simply loops and creates these
+events.  one thread per trip, can javaascript do multiple threads?
+
+it would also be cool if we can pull data from twitter or fb.
+- use celery to do this, with the redis backend? (why redis and mongodb)
+
+consumer: python/django backend that stores data and query web page that pulls
+that data out and plots on map or provides a graph (using d3js).
+
+- webapp: take a trip and provides muni or bike alternative.
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+to mitigate high insert: multiple indexes
+
+1) trip ID object: indexed by trip ID: gives queues containing trips
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+hmm, ok, so we can use rabbitmq msg queues, and have the threads of each
+producer send data to a exchange.  the question is, do we need locking around
+the queue?  on the receive end, we can have a thread pool handling the load,
+which we'll have to estimate to the time needed to process a request.  to
+process a request:
+
+ start
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+There's no way for the TripProcessor to really stop unless it's start
+call is run on another thread.
+
+ok...so Ricardo says I should try celery instead, which runs on top of rmq (not
+pika).
+
+ok...so celery has these tasks per app/method (TripProcessor) which are executed by the caller
+(the TripGenerator).  So let's see how this all fits:
+
+Trip() -> calls these tasks:
+TripBegin(id, lat, long)
+TripUpdate(id, lat, long)
+TripEnd(id, lat, long, fare)
+
+Each of these has a latitude/longitude to it, so we can do:
+
+num = NumTripsIntersect(bl, tr)
+num = NumTripsStarted(bl, tr)
+(num, fare) = NumTripsStopped(bl, tr)
+num = NumTripsAtTime(t0)
+
+for each task then, we do:
+1) check which queue it needs to be in.
+
+grid of queues, let's say we have 100 queues, so we split it up 10 x 10.
+-90:90: -90:-81, -80:-71,..., -10:-1, 0:9, 10:19
+-180:180
+
+What data is in each location queue?
+  - TripStart: time, tripID
+  - TripUpdate: time, tripID
+  - TripEnd: time, tripID, fare
+
+trip queue: ID:{locations, fare}
+
+IMPLEMENTATION:
+
+NumTripsIntersect()
+  - get intersecting queues, sum up total of all inclusive queues.
+
+NumTripsStarted(bl, tr)
+  - get intersecting queues, sum up total of all queue.tripsStarted (Q[lat][long][start])
+
+  trips started and fare:
+   - find region queues
+   - sum num q[x][y][start]
+   - get list of trip ids
+   - for all trip ids, get sum of fare.
+
+NumTripsEnded(bl, tr)
+  - get intersecting queues, sum up total of all Q[lat][long][end]
+
+NumTripsAtTime(t):
+  - ???
+
+Insert: O(c), whre c is the number of queues it belongs to:
+
+1) insert into [start,update,end],
+   insert into trip queue?
+   ? time?
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+worker:
+$ celery worker --app=tripgrid -l info
+
+geneator
+$ python
+>>> from tripgrid.TripTasks import *
+>>> f = TripBegin.delay(1, 3, 4)
+
+python
+>>> from tripgrid.simulator import *
+>>> main()
+
+nice, it works so far...got some logging out on the worker end...
+now to see if we need locking when we insert into our data...
+
