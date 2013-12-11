@@ -47,6 +47,10 @@ class Trip(threading.Thread):
         # XXX We could have this be a param into our class
         self.distance = randint(1, g_maxDistance)
 
+    def log(self, loglevel, *args):
+        if loglevel <= self.debugLevel:
+            print args
+
     def getTripID(self):
         return self.tripID
 
@@ -58,10 +62,6 @@ class Trip(threading.Thread):
             self.fare += g_pricePerUnit * (xMoved + yMoved)
         self.previousLocation = newLocation
         return self.fare
-
-    def log(self, loglevel, *args):
-        if loglevel <= self.debugLevel:
-            print args
 
     def addLocation(self, newLocation):
         self.locations.append(newLocation)

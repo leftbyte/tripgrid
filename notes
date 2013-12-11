@@ -115,6 +115,9 @@ What data is in each location queue?
   - TripUpdate: time, tripID
   - TripEnd: time, tripID, fare
 
+We want three queues because for a query for all the start/ends, we don't want
+to have to check the trips for those tripIDs in the middle of the box.
+
 trip queue: ID:{locations, fare}
 
 IMPLEMENTATION:
@@ -148,15 +151,75 @@ Insert: O(c), whre c is the number of queues it belongs to:
 worker:
 $ celery worker --app=tripgrid -l info
 
-geneator
+generator
 $ python
 >>> from tripgrid.TripTasks import *
 >>> f = TripBegin.delay(1, 3, 4)
 
 python
->>> from tripgrid.simulator import *
->>> main()
+>>> import tripgrid.simulator
+>>> tripgrid.simulator.main()
 
 nice, it works so far...got some logging out on the worker end...
 now to see if we need locking when we insert into our data...
 
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+another way to do this would be to have each task be a grid queue and have
+each message be:
+Message Type:(Message Data)
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+wait...let's so we define a block of (5,5) (25,25), and let's say we have block on every 10
+
+
+40-49  -    -     -     -     -
+30-39  -    -     -     -     -
+20-29  -    -     -     -     -
+10-19  -    -     -     -     -
+  0-9  -    -     -     -     -
+      0-9 10-19 20-29 30-39 40-49
+
+how do we split a queue?  e.g. there will be some tripIDs in a queue
+that should not be counted, so how do we remove those from the count?
+
+within a queue, we would have to still go through X number of tripIDs, but
+this is still better than brute force...
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+for now, we'll just have one list in each tripqueue.  dunno what we'd do with time..
+
+This is what we had before
+        if "locations" not in self.gridQueue[x][y][QUEUE_BEGIN]:
+            self.gridQueue[x][y][QUEUE_BEGIN] = {'locations':[]}
+        self.gridQueue[x][y][QUEUE_BEGIN]['locations'].append(tripID)
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+oy...I think I need some locking or something...
+
+[2013-12-11 01:36:23,921: WARNING/Worker-4] TripBegin 1: -16,-178
+[2013-12-11 01:36:23,921: WARNING/Worker-2] TripBegin 2: -5,45
+[2013-12-11 01:36:23,922: WARNING/Worker-4] Added trip ID 1 to tripQueue: [1]
+[2013-12-11 01:36:23,923: WARNING/Worker-2] Added trip ID 2 to tripQueue: [2]
+[2013-12-11 01:36:23,921: WARNING/Worker-3] TripBegin 0: -23,159
+[2013-12-11 01:36:23,923: INFO/MainProcess] Received task: tripgrid.TripTasks.TripBegin[e84a21fe-f38b-4e6c-b1e5-05396d693476]
+[2013-12-11 01:36:23,923: WARNING/Worker-3] Added trip ID 0 to tripQueue: [0]
+[2013-12-11 01:36:23,931: INFO/MainProcess] Received task: tripgrid.TripTasks.TripBegin[95b437d4-b025-4e17-ae73-90f3010738fc]
+[2013-12-11 01:36:23,934: INFO/MainProcess] Received task: tripgrid.TripTasks.TripBegin[edc29329-bddf-41ef-88bf-80015afb113c]
+[2013-12-11 01:36:23,942: INFO/MainProcess] Received task: tripgrid.TripTasks.TripEnd[19af066e-dd20-46f2-a185-b218dd75fc24]
+[2013-12-11 01:36:23,984: INFO/MainProcess] Task tripgrid.TripTasks.TripBegin[b4d26f82-befb-4015-b18b-474764789384] succeeded in 0.0634945890051s: None
+[2013-12-11 01:36:23,993: WARNING/Worker-2] TripBegin 3: -42,164
+[2013-12-11 01:36:23,993: WARNING/Worker-2] Added trip ID 3 to tripQueue: [2, 3]
+[2013-12-11 01:36:23,994: INFO/MainProcess] Task tripgrid.TripTasks.TripBegin[d7bf548a-ff4a-481e-8f68-b42126f97440] succeeded in 0.0730876550078s: None
+[2013-12-11 01:36:23,995: INFO/MainProcess] Task tripgrid.TripTasks.TripBegin[5e429547-7bd8-436f-8adf-5773b04f73bf] succeeded in 0.0741183749633s: None
+[2013-12-11 01:36:23,999: WARNING/Worker-3] TripBegin 5: -75,-166
+[2013-12-11 01:36:23,999: WARNING/Worker-3] Added trip ID 5 to tripQueue: [0, 5]
+[2013-12-11 01:36:24,000: WARNING/Worker-1] TripEnd 5: -78,-164 = $5
+[2013-12-11 01:36:24,025: INFO/MainProcess] Task tripgrid.TripTasks.TripBegin[edc29329-bddf-41ef-88bf-80015afb113c] succeeded in 0.0267114689923s: None
+[2013-12-11 01:36:24,030: INFO/MainProcess] Task tripgrid.TripTasks.TripBegin[e84a21fe-f38b-4e6c-b1e5-05396d693476] succeeded in 0.0368390340009s: None
+[2013-12-11 01:36:24,029: WARNING/Worker-2] TripBegin 4: 65,180
+[2013-12-11 01:36:24,030: WARNING/Worker-2] Added trip ID 4 to tripQueue: [2, 3, 4]
+[2013-12-11 01:36:24,053: ERROR/MainProcess] Task tripgrid.TripTasks.TripEnd[19af066e-dd20-46f2-a185-b218dd75fc24] raised unexpected: Exception('Trip ended for unknown tripID', 5)

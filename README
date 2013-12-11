@@ -1,0 +1,15 @@
+To run, you'll need three consoles:
+
+- rabbitmq
+- celery
+- python (not 3)
+
+1) start celery app
+> celery worker --app=tripgrid -l info
+
+2) start the simulator
+> python
+>>> import tripgrid.simulator
+>>> tripgrid.simulator.main()
+
+3) query some information
