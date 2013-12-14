@@ -2,7 +2,7 @@
 
 ##
 # simulator.py -
-#    Module for driving the Trip and TripProcessor.
+#    Module for driving the Trip generator.
 ##
 
 from __future__ import absolute_import

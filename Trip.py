@@ -13,7 +13,7 @@ import threading
 import time
 from random import randint
 from tripgrid.LocationGenerator import *
-from tripgrid.TripTasks import *
+from tripgrid.TripGrid import *
 
 g_tripID = 0
 g_delaySec = 1 # delay between points
@@ -42,9 +42,9 @@ class Trip(threading.Thread):
         self.location = LocationGenerator()
         self.locations = [] # local copy of trip points
         self.previousLocation = None
+        self.tripGrid = TripGrid()
 
         # Each trip will be of a randomized distance
-        # XXX We could have this be a param into our class
         self.distance = randint(1, g_maxDistance)
 
     def log(self, loglevel, *args):
@@ -80,22 +80,22 @@ class Trip(threading.Thread):
             self.started = True
             nextLoc = self.location.getNext()
             self.addLocation(nextLoc)
-            TripBegin.delay(self.tripID, *nextLoc)
+            self.tripGrid.startTrip.delay(self.tripID, nextLoc)
             self.start()
 
     def endTrip(self):
-        if self.started:
-            nextLoc = self.location.getNext()
-            self.addLocation(nextLoc)
-            TripEnd.delay(self.tripID, self.fare, *nextLoc)
-            self.exitFlag = True
-            self.started = False
+        if not self.started:
+            raise Exception("Error: endTrip called without having been started.")
+        nextLoc = self.location.getNext()
+        self.addLocation(nextLoc)
+        self.tripGrid.endTrip.delay(self.tripID, self.fare, nextLoc)
+        self.exitFlag = True
+        self.started = False
 
     def run(self):
         '''Main thread method
         '''
         self.travel()
-        self.endTrip()
         self.log(2, "trip data: %d $%d %r" % (self.tripID, self.fare, self.locations))
 
     def travel(self):
@@ -108,4 +108,6 @@ class Trip(threading.Thread):
             time.sleep(g_delaySec)
             nextLoc = self.location.getNext()
             self.addLocation(nextLoc)
-            TripUpdate.delay(self.tripID, *nextLoc)
+            self.tripGrid.updateTrip.delay(self.tripID, nextLoc)
+        self.endTrip()
+        self.tripGrid.logTrips.delay()

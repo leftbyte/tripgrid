@@ -3,15 +3,19 @@
 ##
 # TripGrid.py -
 #
-#    Module to keep the trip grid data.
+#    Module to store the trip data as a grid.
 ##
 
 from __future__ import absolute_import
 import os
 import sys
 import time
+from tripgrid.celery import app
+from celery.contrib.methods import task_method
+
+# We import from tripgrid.LocationGenerator for the globals...though, we should
+# probably just move that out to some common defines.
 from tripgrid.LocationGenerator import *
-from multiprocessing import Process, Lock
 
 g_debugLevel = 2
 
@@ -36,7 +40,6 @@ class TripGrid():
     '''
     def __init__(self):
         self.debugLevel = g_debugLevel
-        self.mutex = Lock()
 
         print "Create TripGrid", self
 
@@ -83,47 +86,55 @@ class TripGrid():
                 return queueY
             queueY += 1
 
+    def initTrip(self, tripID):
+        self.tripQueue[tripID] = {'fare': 0, 'locations': []}
+        print "Added trip ID %d to tripQueue: %r" % (tripID,self.tripQueue.keys())
+
+    @app.task(filter=task_method)
     def startTrip(self, tripID, location):
-        with self.mutex:
-            if tripID in self.tripQueue:
-                raise Exception("Trip started for existing tripID", tripID)
-            self.tripQueue[tripID] = {'fare': 0, 'locations': [location]}
-            print "Added trip ID %d to tripQueue: %r" % (tripID,self.tripQueue.keys())
+        if tripID not in self.tripQueue:
+            self.initTrip(tripID)
+        self.tripQueue[tripID]['locations'].append(location)
 
-            # append to the gridQueue
-            x = self.GetQueueX(location)
-            y = self.GetQueueY(location)
-            self.gridQueue[x][y][QUEUE_BEGIN].append(tripID)
-            self.gridQueue[x][y][QUEUE_ALL].append(tripID)
-            # self.updateTrip(tripID, location)
+        # append to the gridQueue
+        x = self.GetQueueX(location)
+        y = self.GetQueueY(location)
+        self.gridQueue[x][y][QUEUE_BEGIN].append(tripID)
+        self.gridQueue[x][y][QUEUE_ALL].append(tripID)
 
+    @app.task(filter=task_method)
     def updateTrip(self, tripID, location):
-        with self.mutex:
-            if tripID not in self.tripQueue:
-                raise Exception("Trip updated for nonexistent tripID", tripID, self.tripQueue.keys())
-            self.tripQueue[tripID]['locations'].append(location)
+        if tripID not in self.tripQueue:
+            self.initTrip(tripID)
+        self.tripQueue[tripID]['locations'].append(location)
 
-            # append to the gridQueue
-            x = self.GetQueueX(location)
-            y = self.GetQueueY(location)
-            self.gridQueue[x][y][QUEUE_ALL].append(tripID)
+        # append to the gridQueue
+        x = self.GetQueueX(location)
+        y = self.GetQueueY(location)
+        self.gridQueue[x][y][QUEUE_ALL].append(tripID)
 
+    @app.task(filter=task_method)
     def endTrip(self, tripID, fare, location):
-        with self.mutex:
-            if tripID not in self.tripQueue:
-                raise Exception("Trip ended for unknown tripID", tripID, self.tripQueue.keys())
-            # self.updateTrip(tripID, location)
-            self.tripQueue[tripID]['locations'].append(location)
-            self.tripQueue[tripID]['fare'] = fare
+        if tripID not in self.tripQueue:
+            self.initTrip(tripID)
+        self.tripQueue[tripID]['locations'].append(location)
+        self.tripQueue[tripID]['fare'] = fare
 
-            # append to the gridQueue
-            x = self.GetQueueX(location)
-            y = self.GetQueueY(location)
-            # swap out the default list to a dict to hold a fare sum in the location
-            if (len(self.gridQueue[x][y][QUEUE_END]) == 0):
-                self.gridQueue[x][y][QUEUE_END] = {'fare':0, 'locations':[]}
+        # append to the gridQueue
+        x = self.GetQueueX(location)
+        y = self.GetQueueY(location)
+        # swap out the default list to a dict to hold a fare sum in the location
+        if (len(self.gridQueue[x][y][QUEUE_END]) == 0):
+            self.gridQueue[x][y][QUEUE_END] = {'fare':0, 'locations':[]}
 
-            self.gridQueue[x][y][QUEUE_ALL].append(tripID)
-            self.gridQueue[x][y][QUEUE_END]['locations'].append(tripID)
-            self.gridQueue[x][y][QUEUE_END]['fare'] += fare
+        self.gridQueue[x][y][QUEUE_ALL].append(tripID)
+        self.gridQueue[x][y][QUEUE_END]['locations'].append(tripID)
+        self.gridQueue[x][y][QUEUE_END]['fare'] += fare
 
+    @app.task(filter=task_method)
+    def logTrips(self):
+        print "Logging trips:"
+        for k in self.tripQueue.keys():
+            print "tripID %d $%d: %r" % (k,
+                                         self.tripQueue[k]['fare'],
+                                         self.tripQueue[k]['locations'])

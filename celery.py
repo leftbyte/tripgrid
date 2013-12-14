@@ -13,7 +13,7 @@ from celery import Celery
 app = Celery('tripgrid',
              broker='amqp://',
              backend='amqp://',
-             include=['tripgrid.TripTasks'])
+             include=['tripgrid.TripGrid'])
 
 # Optional configuration, see the application user guide.
 app.conf.update(
