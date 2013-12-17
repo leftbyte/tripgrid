@@ -26,10 +26,6 @@ import redis
 from tripgrid.celery import app
 from tripgrid.TripCommon import *
 
-# We import from tripgrid.LocationGenerator for the globals...though, we should
-# probably just move that out to some common defines.
-from tripgrid.LocationGenerator import *
-
 # We will split up the virtual space by a grid with each queue representing a
 # geographic region.
 g_debugLevel = 2
