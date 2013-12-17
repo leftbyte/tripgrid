@@ -17,11 +17,8 @@
 import os
 import sys
 from random import randint
+from TripCommon import *
 
-g_maxLatitude = 90
-g_minLatitude = -90
-g_maxLongitude = 180
-g_minLongitude = -180
 g_maxDelta = 5 # +/- from previous point
 
 class LocationGenerator:

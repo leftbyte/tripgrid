@@ -24,6 +24,7 @@ import sys
 import time
 import redis
 from tripgrid.celery import app
+from tripgrid.TripCommon import *
 
 # We import from tripgrid.LocationGenerator for the globals...though, we should
 # probably just move that out to some common defines.
@@ -31,48 +32,12 @@ from tripgrid.LocationGenerator import *
 
 # We will split up the virtual space by a grid with each queue representing a
 # geographic region.
-g_numLatQueues = 10
-g_numLongQueues = 10
 g_debugLevel = 2
 redisServer = redis.Redis("localhost")
 
 def log(loglevel, *args):
     if loglevel <= g_debugLevel:
         print args
-
-def GetQueueX(location):
-    '''
-    Maps the latitude to the X coordinate of the queue.  For simplicity, we only
-    handle integer location units.
-    '''
-    delta = (g_maxLatitude - g_minLatitude) / g_numLatQueues
-    if (g_maxLatitude - g_minLatitude) % g_numLatQueues:
-        raise Exception("Error: Deltas between queues are not uniform.")
-    queueX = 0
-    for x in xrange(g_minLatitude, g_maxLatitude, delta):
-        if (x <= location[0] < x + delta):
-            return queueX
-        queueX += 1
-
-def GetQueueY(location):
-    '''
-    Maps the longitude to the Y coordinate of the queue.  For simplicity, we only
-    handle integer location units.
-    '''
-    delta = (g_maxLongitude - g_minLongitude) / g_numLongQueues
-    if (g_maxLongitude - g_minLongitude) % g_numLongQueues:
-        raise Exception("Error: Deltas between queues are not uniform.")
-    queueY = 0
-    for y in xrange(g_minLongitude, g_maxLongitude, delta):
-        if (y <= location[0] < y + delta):
-            return queueY
-        queueY += 1
-
-def getTripKey(id, type):
-    return ("tripQueue:%d" % id) + ":" + type
-
-def getTripGridKey(x, y, type):
-    return ("tripGrid:%d:%d" % (x, y)) + ":" + type
 
 @app.task
 def startTrip(tripID, location):
@@ -87,8 +52,8 @@ def startTrip(tripID, location):
     redisServer.sadd("tripIDs", tripID)
 
     # add to the gridQueue(s)
-    x = GetQueueX(location)
-    y = GetQueueY(location)
+    x = LatitudeToGridQueue(location[0])
+    y = LongitudeToGridQueue(location[1])
     gridBeginKey = getTripGridKey(x, y, "BEGIN")
     redisServer.zadd(gridBeginKey, tripID, now)
     gridAllKey = getTripGridKey(x, y, "ALL")
@@ -106,8 +71,8 @@ def updateTrip(tripID, location):
     redisServer.zadd(tripQueueLocKey, location, now)
 
     # add to the gridQueue(s)
-    x = GetQueueX(location)
-    y = GetQueueY(location)
+    x = LatitudeToGridQueue(location[0])
+    y = LongitudeToGridQueue(location[1])
     gridAllKey = getTripGridKey(x, y, "ALL")
     redisServer.zadd(gridAllKey, tripID, now)
 
@@ -127,8 +92,8 @@ def endTrip(tripID, fare, location):
     redisServer.set(tripQueueFareKey, fare)
 
     # append to the gridQueue
-    x = GetQueueX(location)
-    y = GetQueueY(location)
+    x = LatitudeToGridQueue(location[0])
+    y = LongitudeToGridQueue(location[1])
     gridEndKey = getTripGridKey(x, y, "END")
     redisServer.zadd(gridEndKey, tripID, now)
     gridFareKey = getTripGridKey(x, y, "END:fare")

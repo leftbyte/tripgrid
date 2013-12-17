@@ -77,7 +77,7 @@ class Trip(threading.Thread):
         # We only allow the trip to be started once.
         assert len(self.locations) == 0
         if not self.started:
-            self.log(2, "starting %d distance %d" %(self.tripID, self.distance))
+            self.log(3, "starting %d distance %d" %(self.tripID, self.distance))
             self.started = True
             nextLoc = self.location.getNext()
             self.addLocation(nextLoc)

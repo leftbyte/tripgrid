@@ -11,7 +11,7 @@ import time
 from tripgrid.Trip import *
 
 def main():
-    numTrips = 6
+    numTrips = 20
     # XXX we actually don't need to keep the trips around...
     trips = []
     for x in range(0, numTrips):
