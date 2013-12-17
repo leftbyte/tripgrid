@@ -3,138 +3,143 @@
 ##
 # TripGrid.py -
 #
-#    Module to store the trip data as a grid.
+#    Module to store the trip data as a grid on top of Redis.
+#
+#    Types of data stored:
+#    Full trip locations
+#    - tripIDs = set(of valid IDs), so that we don't have to use 'keys()'
+#    - tripID:ID:locations = ordered set(location, time)
+#    - tripID:ID:fare      = fare
+#
+#    Grid to optimize queries
+#    - grid:X:Y:ALL:locations   = ordered set(location, time)
+#    - grid:X:Y:BEGIN:locations = ordered set(location, time)
+#    - grid:X:Y:END:locations   = ordered set(location, time)
+#    - grid:X:Y:END:fare        = fare
 ##
 
 from __future__ import absolute_import
 import os
 import sys
 import time
+import redis
 from tripgrid.celery import app
-from celery.contrib.methods import task_method
 
 # We import from tripgrid.LocationGenerator for the globals...though, we should
 # probably just move that out to some common defines.
 from tripgrid.LocationGenerator import *
 
-g_debugLevel = 2
-
 # We will split up the virtual space by a grid with each queue representing a
 # geographic region.
 g_numLatQueues = 10
 g_numLongQueues = 10
+g_debugLevel = 2
+redisServer = redis.Redis("localhost")
 
-# Each Lat/Long queue will contain a set of queues to optimize data queries
-# 0: ALL
-# 1: BEGIN
-# 2: END
-g_numQueueTypes = 3
-QUEUE_ALL    = 0
-QUEUE_BEGIN  = 1
-QUEUE_END    = 2
+def log(loglevel, *args):
+    if loglevel <= g_debugLevel:
+        print args
 
-class TripGrid():
-    '''TripGrid -
-    A collection of queues to support tracking and querying of Trip data across
-    a virtual grid.
+def GetQueueX(location):
     '''
-    def __init__(self):
-        self.debugLevel = g_debugLevel
+    Maps the latitude to the X coordinate of the queue.  For simplicity, we only
+    handle integer location units.
+    '''
+    delta = (g_maxLatitude - g_minLatitude) / g_numLatQueues
+    if (g_maxLatitude - g_minLatitude) % g_numLatQueues:
+        raise Exception("Error: Deltas between queues are not uniform.")
+    queueX = 0
+    for x in xrange(g_minLatitude, g_maxLatitude, delta):
+        if (x <= location[0] < x + delta):
+            return queueX
+        queueX += 1
 
-        print "Create TripGrid", self
+def GetQueueY(location):
+    '''
+    Maps the longitude to the Y coordinate of the queue.  For simplicity, we only
+    handle integer location units.
+    '''
+    delta = (g_maxLongitude - g_minLongitude) / g_numLongQueues
+    if (g_maxLongitude - g_minLongitude) % g_numLongQueues:
+        raise Exception("Error: Deltas between queues are not uniform.")
+    queueY = 0
+    for y in xrange(g_minLongitude, g_maxLongitude, delta):
+        if (y <= location[0] < y + delta):
+            return queueY
+        queueY += 1
 
-        # XXX Keep the grid queues local for now, check performance, and we can
-        # spawn one task worker per queue if performance is too bad.
-        #
-        # XXX another way to do this would be to have each task be a grid queue and have
-        # each message be: Message Type:(Message Data)
-        #
-        # The gridQueue will be indexed by: tripQueue[Lat][Long][Queue type].
-        self.gridQueue = [[[[] for t in xrange(g_numQueueTypes)]      \
-                               for y in xrange(g_numLongQueues)]      \
-                               for x in xrange(g_numLatQueues)]
-        # The trip queue maps an index to its fare and all its locations.
-        self.tripQueue = {}
+def getTripKey(id, type):
+    return ("tripQueue:%d" % id) + ":" + type
 
-    def log(self, loglevel, *args):
-        if loglevel <= self.debugLevel:
-            print args
+def getTripGridKey(x, y, type):
+    return ("tripGrid:%d:%d" % (x, y)) + ":" + type
 
-    def GetQueueX(self, location):
-        '''Maps the latitude to the X coordinate of the queue.  For simplicity, we only
-        handle integer location units.
-        '''
-        delta = (g_maxLatitude - g_minLatitude) / g_numLatQueues
-        if (g_maxLatitude - g_minLatitude) % g_numLatQueues:
-            raise Exception("Error: Deltas between queues are not uniform.")
-        queueX = 0
-        for x in xrange(g_minLatitude, g_maxLatitude, delta):
-            if (x <= location[0] < x + delta):
-                return queueX
-            queueX += 1
+@app.task
+def startTrip(tripID, location):
+    '''
+    Record the start of a trip.
+    '''
+    log(4, "Starting trip %d %r" % (tripID,location))
+    now = time.time()
+    # add to trip queue
+    tripQueueLocKey = getTripKey(tripID, "locations")
+    redisServer.zadd(tripQueueLocKey, location, now)
+    redisServer.sadd("tripIDs", tripID)
 
-    def GetQueueY(self, location):
-        '''Maps the longitude to the Y coordinate of the queue.  For simplicity, we only
-        handle integer location units.
-        '''
-        delta = (g_maxLongitude - g_minLongitude) / g_numLongQueues
-        if (g_maxLongitude - g_minLongitude) % g_numLongQueues:
-            raise Exception("Error: Deltas between queues are not uniform.")
-        queueY = 0
-        for y in xrange(g_minLongitude, g_maxLongitude, delta):
-            if (y <= location[0] < y + delta):
-                return queueY
-            queueY += 1
+    # add to the gridQueue(s)
+    x = GetQueueX(location)
+    y = GetQueueY(location)
+    gridBeginKey = getTripGridKey(x, y, "BEGIN")
+    redisServer.zadd(gridBeginKey, tripID, now)
+    gridAllKey = getTripGridKey(x, y, "ALL")
+    redisServer.zadd(gridAllKey, tripID, now)
 
-    def initTrip(self, tripID):
-        self.tripQueue[tripID] = {'fare': 0, 'locations': []}
-        print "Added trip ID %d to tripQueue: %r" % (tripID,self.tripQueue.keys())
+@app.task
+def updateTrip(tripID, location):
+    '''
+    Record an update to a trip.
+    '''
+    log(4, "Updating trip %d %r" % (tripID,location))
+    now = time.time()
+    # add to trip queue
+    tripQueueLocKey = getTripKey(tripID, "locations")
+    redisServer.zadd(tripQueueLocKey, location, now)
 
-    @app.task(filter=task_method)
-    def startTrip(self, tripID, location):
-        if tripID not in self.tripQueue:
-            self.initTrip(tripID)
-        self.tripQueue[tripID]['locations'].append(location)
+    # add to the gridQueue(s)
+    x = GetQueueX(location)
+    y = GetQueueY(location)
+    gridAllKey = getTripGridKey(x, y, "ALL")
+    redisServer.zadd(gridAllKey, tripID, now)
 
-        # append to the gridQueue
-        x = self.GetQueueX(location)
-        y = self.GetQueueY(location)
-        self.gridQueue[x][y][QUEUE_BEGIN].append(tripID)
-        self.gridQueue[x][y][QUEUE_ALL].append(tripID)
+@app.task
+def endTrip(tripID, fare, location):
+    '''
+    Record an end to a trip.
+    '''
+    log(4, "Ending trip %d $%d %r" % (tripID, fare, location))
+    now = time.time()
+    # add to trip queue
+    tripQueueLocKey = getTripKey(tripID, "locations")
+    redisServer.zadd(tripQueueLocKey, location, now)
+    tripQueueFareKey = getTripKey(tripID, "fare")
+#     if redisServer.get(tripQueueFareKey) is not None:
+#         raise Exception("ERROR: EndTrip fare already exists for %d." % tripID)
+    redisServer.set(tripQueueFareKey, fare)
 
-    @app.task(filter=task_method)
-    def updateTrip(self, tripID, location):
-        if tripID not in self.tripQueue:
-            self.initTrip(tripID)
-        self.tripQueue[tripID]['locations'].append(location)
+    # append to the gridQueue
+    x = GetQueueX(location)
+    y = GetQueueY(location)
+    gridEndKey = getTripGridKey(x, y, "END")
+    redisServer.zadd(gridEndKey, tripID, now)
+    gridFareKey = getTripGridKey(x, y, "END:fare")
+    redisServer.incrby(gridFareKey, fare)
+    gridAllKey = getTripGridKey(x, y, "ALL")
+    redisServer.zadd(gridAllKey, tripID, now)
 
-        # append to the gridQueue
-        x = self.GetQueueX(location)
-        y = self.GetQueueY(location)
-        self.gridQueue[x][y][QUEUE_ALL].append(tripID)
-
-    @app.task(filter=task_method)
-    def endTrip(self, tripID, fare, location):
-        if tripID not in self.tripQueue:
-            self.initTrip(tripID)
-        self.tripQueue[tripID]['locations'].append(location)
-        self.tripQueue[tripID]['fare'] = fare
-
-        # append to the gridQueue
-        x = self.GetQueueX(location)
-        y = self.GetQueueY(location)
-        # swap out the default list to a dict to hold a fare sum in the location
-        if (len(self.gridQueue[x][y][QUEUE_END]) == 0):
-            self.gridQueue[x][y][QUEUE_END] = {'fare':0, 'locations':[]}
-
-        self.gridQueue[x][y][QUEUE_ALL].append(tripID)
-        self.gridQueue[x][y][QUEUE_END]['locations'].append(tripID)
-        self.gridQueue[x][y][QUEUE_END]['fare'] += fare
-
-    @app.task(filter=task_method)
-    def logTrips(self):
-        print "Logging trips:"
-        for k in self.tripQueue.keys():
-            print "tripID %d $%d: %r" % (k,
-                                         self.tripQueue[k]['fare'],
-                                         self.tripQueue[k]['locations'])
+@app.task
+def logTrips():
+    for id in redisServer.smembers("tripIDs"):
+        locations = redisServer.zrange(getTripKey(int(id), "locations"),
+                                       0, -1, withscores=False)
+        fare = redisServer.get(getTripKey(int(id), "fare"))
+        log(0, "trip %d $%d: %r" % (int(id), int(fare), locations))
