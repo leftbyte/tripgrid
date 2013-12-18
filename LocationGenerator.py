@@ -19,10 +19,9 @@ import sys
 from random import randint
 from TripCommon import *
 
-g_maxDelta = 5 # +/- from previous point
-
 class LocationGenerator:
-    '''Module for generating psuedo longitude and latitude data pairs.
+    '''
+    Module for generating psuedo longitude and latitude data pairs.
     '''
     def __init__(self):
         self.lastX = None
@@ -35,5 +34,22 @@ class LocationGenerator:
             return (self.lastX, self.lastY)
         else:
             xMove = randint(-g_maxDelta, g_maxDelta)
+            # cap the X new value
+            if g_minLatitude <= (self.lastX + xMove) <= g_maxLatitude:
+                newX = self.lastX + xMove
+            elif g_minLatitude >= (self.lastX + xMove):
+                newX = g_minLatitude
+            else:
+                newX = g_maxLatitude
+
             yMove = randint(-g_maxDelta, g_maxDelta)
-            return (self.lastX + xMove, self.lastY + yMove)
+            # cap the Y new value
+            if g_minLongitude <= (self.lastY + yMove) <= g_maxLongitude:
+                newY = self.lastY + yMove
+            elif g_minLongitude >= (self.lastY + yMove):
+                newY = g_minLongitude
+            else:
+                newY = g_maxLongitude
+
+            checkLocation((newX, newY))
+            return (newX, newY)
