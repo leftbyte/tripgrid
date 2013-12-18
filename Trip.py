@@ -16,7 +16,7 @@ from tripgrid.LocationGenerator import *
 import tripgrid.TripGrid
 
 g_debugLevel = 2
-g_tripID = 0            # trip identifier
+g_tripID = 10            # trip identifier
 g_delaySec = 1          # delay between points
 g_maxDistance = 10      # max points of travel
 g_pricePerUnit = 1      # $ / distance travelled.

@@ -12,101 +12,110 @@ import redis
 from TripCommon import *
 
 r = redis.Redis("localhost")
-g_debugLevel = 5
+g_debugLevel = 3
 
 def log(loglevel, *args):
     if loglevel <= g_debugLevel:
         print args
 
-def PruneLeftEdge(x, y0, y1, type):
-    numPrunes = 0
-    gridX = LatitudeToGridQueue(x)
-    gridY0 = LongitudeToGridQueue(y0)
-    gridY1 = LongitudeToGridQueue(y1)
-    yRange = range(gridY0, gridY1)
+def SearchLeftEdge(x, y0, y1, type):
+    additionalTrips = []
+    gridX = latitudeToGridQueue(x)
+    gridY0 = longitudeToGridQueue(y0)
+    gridY1 = longitudeToGridQueue(y1)
+    yRange = range(gridY0, gridY1 + 1)
+    log (5, "pruning left edge with x = %d from %d:%d" % (x, y0, y1))
     for gridY in yRange:
         key = getTripGridKey(gridX, gridY, type)
         tripIDs = r.zrange(key, 0, -1)
+        log(5, "  trips in key %r: %r" % (key, tripIDs))
         for id in tripIDs:
             locations = r.zrange(getTripKey(int(id), "locations"), 0, -1)
-            pruneThisTrip = True
+            log(5, "  finding locations in trip %r where %d <= %r" % (id, x, locations))
             for l in locations:
-                if (l[0] >= x):
-                    log(5, "Found location in left edge %r >= %d %d %d" % (l, x, y0, y1))
-                    pruneThisTrip = False
+                locStr = l.strip("()").split(",")
+                log(7, "  comparing %d <= %d" % (x, int(locStr[0])))
+                if (x <= int(locStr[0])):
+                    log(5, "  found location in left edge %d %d %d <= %r" % (x, y0, y1, l))
+                    additionalTrips.append(id)
                     break
-            if pruneThisTrip:
-                numPrunes += 1
-    log (5, "pruning left edge:", numPrunes)
-    return numPrunes
+    log (5, "additional left edge trips:", additionalTrips)
+    return additionalTrips
 
-def PruneRightEdge(x, y0, y1, type):
-    numPrunes = 0
-    gridX = LatitudeToGridQueue(x)
-    gridY0 = LongitudeToGridQueue(y0)
-    gridY1 = LongitudeToGridQueue(y1)
-    yRange = range(gridY0, gridY1)
+def SearchRightEdge(x, y0, y1, type):
+    additionalTrips = []
+    gridX = latitudeToGridQueue(x)
+    gridY0 = longitudeToGridQueue(y0)
+    gridY1 = longitudeToGridQueue(y1)
+    yRange = range(gridY0, gridY1 + 1)
+    log (5, "pruning right edge with x = %d from %d:%d" % (x, y0, y1))
     for gridY in yRange:
         key = getTripGridKey(gridX, gridY, type)
         tripIDs = r.zrange(key, 0, -1)
+        log(5, "  trips in key %r: %r" % (key, tripIDs))
         for id in tripIDs:
             locations = r.zrange(getTripKey(int(id), "locations"), 0, -1)
-            pruneThisTrip = True
+            log(5, "  finding locations in trip %r where %d >= %r" % (id, x, locations))
             for l in locations:
-                if (l[0] <= x):
-                    log(5, "Found location in right edge %r <= %d %d %d" % (l, x, y0, y1))
-                    pruneThisTrip = False
+                locStr = l.strip("()").split(",")
+                log(7, "  comparing %d <= %d" % (x, int(locStr[0])))
+                if (x >= int(locStr[0])):
+                    log(5, "  found location in right edge %d %d %d >= %r" % (x, y0, y1, l))
+                    additionalTrips.append(id)
                     break
-            if pruneThisTrip:
-                numPrunes += 1
-    log (5, "pruning right edge:", numPrunes)
-    return numPrunes
 
-def PruneBottomEdge(y, x0, x1, type):
-    numPrunes = 0
-    gridY = LongitudeToGridQueue(y)
-    gridX0 = LatitudeToGridQueue(x0)
-    gridX1 = LatitudeToGridQueue(x1)
+    log (5, "additional right edge trips:", additionalTrips)
+    return additionalTrips
+
+def SearchBottomEdge(y, x0, x1, type):
+    additionalTrips = []
+    gridY = longitudeToGridQueue(y)
+    gridX0 = latitudeToGridQueue(x0)
+    gridX1 = latitudeToGridQueue(x1)
     xRange = range(gridX0, gridX1 + 1)
+    log (5, "pruning bottom edge with y = %d from %d:%d" % (y, x0, x1))
     for gridX in xRange:
         key = getTripGridKey(gridX, gridY, type)
         tripIDs = r.zrange(key, 0, -1)
+        log(5, "  trips in key %r: %r" % (key, tripIDs))
         for id in tripIDs:
             locations = r.zrange(getTripKey(int(id), "locations"), 0, -1)
-            pruneThisTrip = True
+            log(5, "  finding locations in trip %r where %d <= %r" % (id, y, locations))
             for l in locations:
-                if (l[0] >= y):
-                    log(5, "Found location above bottom %r >= %d %d %d" % (l, x, y0, y1))
-                    pruneThisTrip = False
+                locStr = l.strip("()").split(",")
+                log(7, "  comparing %d <= %d" % (y, int(locStr[1])))
+                if (y <= int(locStr[1])):
+                    log(5, "  Found location above bottom edge %d %d %d <= %r" % (y, x0, x1, l))
+                    additionalTrips.append(id)
                     break
-            if pruneThisTrip:
-                numPrunes += 1
-    log (5, "pruning bottom edge:", numPrunes)
-    return numPrunes
+    log (5, "additional bottom edge trips:", additionalTrips)
+    return additionalTrips
 
-def PruneTopEdge(y, x0, x1, type):
-    numPrunes = 0
-    gridY = LongitudeToGridQueue(y)
-    gridX0 = LatitudeToGridQueue(x0)
-    gridX1 = LatitudeToGridQueue(x1)
+def SearchTopEdge(y, x0, x1, type):
+    additionalTrips = []
+    gridY = longitudeToGridQueue(y)
+    gridX0 = latitudeToGridQueue(x0)
+    gridX1 = latitudeToGridQueue(x1)
     xRange = range(gridX0, gridX1 + 1)
+    log (5, "pruning top edge with y = %d from %d:%d" % (y, x0, x1))
     for gridX in xRange:
         key = getTripGridKey(gridX, gridY, type)
         tripIDs = r.zrange(key, 0, -1)
+        log(5, "  trips in key %r: %r" % (key, tripIDs))
         for id in tripIDs:
             locations = r.zrange(getTripKey(int(id), "locations"), 0, -1)
-            pruneThisTrip = True
+            log(5, "  finding locations in trip %r where %d >= %r" % (id, y, locations))
             for l in locations:
-                if (l[0] <= y):
-                    log(5, "Found location below top %r >= %d %d %d" % (l, x, y0, y1))
-                    pruneThisTrip = False
+                locStr = l.strip("()").split(",")
+                log(7, "  comparing %d <= %d" % (y, int(locStr[1])))
+                if (y >= int(locStr[1])):
+                    log(5, "  Found location below top edge %d %d %d <= %r" % (y, x0, x1, l))
+                    additionalTrips.append(id)
                     break
-            if pruneThisTrip:
-                numPrunes += 1
-    log (5, "pruning top edge:", numPrunes)
-    return numPrunes
+    log (5, "additional bottom edge trips:", additionalTrips)
+    return additionalTrips
 
-def CheckEdges(numTrips, bl, tr, type):
+def CheckEdges(bl, tr, type):
     '''
     Check the edges of our bounding box and inspect each tripID queue
     to make sure the trip should be included in our trip count.
@@ -119,15 +128,21 @@ def CheckEdges(numTrips, bl, tr, type):
     long_bottom_edges = range(g_minLongitude, g_maxLongitude, delta)
     long_top_edges = [x + delta for x in range(g_minLongitude, g_maxLongitude, delta)]
 
-    if bl[0] not in lat_left_edges:
-        numTrips -= PruneLeftEdge(bl[0], bl[1], tr[1], type)
-    if tr[0] not in lat_right_edges:
-        numTrips -= PruneRightEdge(tr[0], bl[1], tr[1], type)
-    if bl[1] not in long_bottom_edges:
-        numTrips -= PruneBottomEdge(bl[1], bl[0], tr[0], type)
-    if tr[1] not in long_top_edges:
-        numTrips -= PruneTopEdge(tr[1], bl[0], tr[0], type)
-    return numTrips
+    additionalTrips = []
+    # log(2, "XXX", bl[0], "in", lat_left_edges)
+    # if bl[0] not in lat_left_edges:
+    additionalTrips += SearchLeftEdge(bl[0], bl[1], tr[1], type)
+    # log(2, "XXX", tr[0], "in", lat_right_edges)
+    # if tr[0] not in lat_right_edges:
+    additionalTrips += SearchRightEdge(tr[0], bl[1], tr[1], type)
+    # log(2, "XXX", bl[1], "in", long_bottom_edges)
+    # if bl[1] not in long_bottom_edges:
+    additionalTrips += SearchBottomEdge(bl[1], bl[0], tr[0], type)
+    # log(2, "XXX", tr[1], "in", long_top_edges)
+    # if tr[1] not in long_top_edges:
+    additionalTrips += SearchTopEdge(tr[1], bl[0], tr[0], type)
+    log(5, "additional trips added", additionalTrips)
+    return additionalTrips
 
 def TripsInRect(bl, tr):
     '''
@@ -135,23 +150,30 @@ def TripsInRect(bl, tr):
     (bottom,left) and (top,right) points.
     '''
     # First we generate the list of grid locations we want to query
-    blX = LatitudeToGridQueue(bl[0])
-    blY = LongitudeToGridQueue(bl[1])
-    trX = LatitudeToGridQueue(tr[0])
-    trY = LongitudeToGridQueue(tr[1])
+    blX = latitudeToGridQueue(bl[0])
+    blY = longitudeToGridQueue(bl[1])
+    trX = latitudeToGridQueue(tr[0])
+    trY = longitudeToGridQueue(tr[1])
 
-    xRange = range(blX, trX)
-    yRange = range(blY, trY)
-    numTrips = 0
+    # XXX: we should check the indicies and makes sure we're still legit after
+    # the subtraction of the edges.
+
+    # We have to check the edges separately.
+    xRange = range(blX + 1, trX)
+    yRange = range(blY + 1, trY)
+    trips = []
     for x in xRange:
         for y in xRange:
             key = getTripGridKey(x, y, "ALL")
-            numTrips += r.zcard(key)
+            log(5, "  XXX key %r" % (key,))
+            newtrips = r.zrange(key, 0, -1)
+            log(5, "  trips added for %r: %r" % (key, newtrips))
+            trips += newtrips
 
-    numTrips = CheckEdges(numTrips, bl, tr, "ALL")
-
-    print "Trips: ", numTrips
-    return numTrips
+    trips += CheckEdges(bl, tr, "ALL")
+    trips = [int(x) for x in trips]
+    print "Trips: ", len(set(trips)), list(set(sorted(trips)))
+    return len(trips)
 
 def TripsStartedInRect(bl, tr):
     '''

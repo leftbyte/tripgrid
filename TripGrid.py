@@ -28,7 +28,7 @@ from tripgrid.TripCommon import *
 
 # We will split up the virtual space by a grid with each queue representing a
 # geographic region.
-g_debugLevel = 2
+g_debugLevel = 5
 redisServer = redis.Redis("localhost")
 
 def log(loglevel, *args):
@@ -44,15 +44,19 @@ def startTrip(tripID, location):
     now = time.time()
     # add to trip queue
     tripQueueLocKey = getTripKey(tripID, "locations")
+    log(5, "ZADD %r %r %r" % (tripQueueLocKey, now, location))
     redisServer.zadd(tripQueueLocKey, location, now)
+    log(5, "SADD %r %r" % ("tripIDs", tripID))
     redisServer.sadd("tripIDs", tripID)
 
     # add to the gridQueue(s)
-    x = LatitudeToGridQueue(location[0])
-    y = LongitudeToGridQueue(location[1])
+    x = latitudeToGridQueue(location[0])
+    y = longitudeToGridQueue(location[1])
     gridBeginKey = getTripGridKey(x, y, "BEGIN")
+    log(5, "ZADD %r %r %r" % (gridBeginKey, now, tripID))
     redisServer.zadd(gridBeginKey, tripID, now)
     gridAllKey = getTripGridKey(x, y, "ALL")
+    log(5, "ZADD %r %r %r" % (gridAllKey, now, tripID))
     redisServer.zadd(gridAllKey, tripID, now)
 
 @app.task
@@ -64,12 +68,14 @@ def updateTrip(tripID, location):
     now = time.time()
     # add to trip queue
     tripQueueLocKey = getTripKey(tripID, "locations")
+    log(5, "ZADD %r %r %r" % (tripQueueLocKey, now, location))
     redisServer.zadd(tripQueueLocKey, location, now)
 
     # add to the gridQueue(s)
-    x = LatitudeToGridQueue(location[0])
-    y = LongitudeToGridQueue(location[1])
+    x = latitudeToGridQueue(location[0])
+    y = longitudeToGridQueue(location[1])
     gridAllKey = getTripGridKey(x, y, "ALL")
+    log(5, "ZADD %r %r %r" % (gridAllKey, now, tripID))
     redisServer.zadd(gridAllKey, tripID, now)
 
 @app.task
@@ -81,20 +87,25 @@ def endTrip(tripID, fare, location):
     now = time.time()
     # add to trip queue
     tripQueueLocKey = getTripKey(tripID, "locations")
+    log(5, "ZADD %r %r %r" % (tripQueueLocKey, now, location))
     redisServer.zadd(tripQueueLocKey, location, now)
     tripQueueFareKey = getTripKey(tripID, "fare")
 #     if redisServer.get(tripQueueFareKey) is not None:
 #         raise Exception("ERROR: EndTrip fare already exists for %d." % tripID)
+    log(5, "SET %r %r" % (tripQueueFareKey, fare))
     redisServer.set(tripQueueFareKey, fare)
 
     # append to the gridQueue
-    x = LatitudeToGridQueue(location[0])
-    y = LongitudeToGridQueue(location[1])
+    x = latitudeToGridQueue(location[0])
+    y = longitudeToGridQueue(location[1])
     gridEndKey = getTripGridKey(x, y, "END")
+    log(5, "ZADD %r %r %r" % (gridEndKey, now, tripID))
     redisServer.zadd(gridEndKey, tripID, now)
     gridFareKey = getTripGridKey(x, y, "END:fare")
+    log(5, "INCRBY %r %r" % (gridFareKey, fare))
     redisServer.incrby(gridFareKey, fare)
     gridAllKey = getTripGridKey(x, y, "ALL")
+    log(5, "ZADD %r %r %r" % (gridAllKey, now, tripID))
     redisServer.zadd(gridAllKey, tripID, now)
 
 @app.task
