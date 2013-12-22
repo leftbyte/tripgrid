@@ -11,16 +11,23 @@ import time
 from tripgrid.Trip import *
 
 def main():
-    numTrips = 20
-    # XXX we actually don't need to keep the trips around...
+    numTrips = 500
     trips = []
-    for x in range(0, numTrips):
-        trip = Trip()
-        trips.append(trip)
-        trip.startTrip()
-        # at this point the Trip is creating new points every second.
+    while True:
+        print "adding %d trips" % (numTrips)
+        for x in range(0, numTrips):
+            trip = Trip()
+            trips.append(trip)
+            trip.startTrip()
 
-    # Wait for some time, then Issue some queries
+        print "trips running: ", len(trips)
+        time.sleep(5)
+
+        numTrips = 0
+        for trip in trips:
+            if trip.ended():
+                numTrips += 1
+                trips.remove(trip)
 
 if __name__ == "__main__":
     main()
