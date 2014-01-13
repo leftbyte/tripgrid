@@ -2,14 +2,21 @@ To run, you'll need three consoles:
 
 - rabbitmq
 - celery
-- python (not 3)
+- redis
+- python
 
-1) start celery app
+- start rabbbitmq
+> sudo rabbitmq-server
+
+- start the redis server
+> redis-server
+
+- start celery app
 > celery worker --app=tripgrid -l info
 
-2) start the simulator
+- start the simulator
 > python
 >>> import tripgrid.simulator
 >>> tripgrid.simulator.main()
 
-3) query some information
+- query some information

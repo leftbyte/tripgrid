@@ -5,11 +5,12 @@
 #
 #    Module for generating psuedo "longitude" and "latitude" data pairs.
 #
+#    XXX: change to actual latitude/longitude points.
 #    Actually, it just generates points between the max/min long/lat values, at
 #    integer increments.  We probably want to generate something to 4 decimal
 #    points (scale of meters).
 #
-#    XXX read:
+#    see:
 #      http://en.wikipedia.org/wiki/Decimal_degrees
 #
 ##
@@ -23,33 +24,96 @@ class LocationGenerator:
     '''
     Module for generating psuedo longitude and latitude data pairs.
     '''
-    def __init__(self):
+    def __init__(self, testQuadrant=None):
         self.lastX = None
         self.lastY = None
 
+        global g_minLatitude
+        global g_maxLatitude
+        global g_minLongitude
+        global g_maxLongitude
+
+        self.minLatitude = g_minLatitude
+        self.maxLatitude = g_maxLatitude
+        self.minLongitude = g_minLongitude
+        self.maxLongitude = g_maxLongitude
+
+#        print "XXX Quad %d, before X values: %d:%d Y values: %d:%d" % (testQuadrant,
+#                                                                   self.minLatitude,
+#                                                                   self.maxLatitude,
+#                                                                   self.minLongitude,
+#                                                                   self.maxLongitude)
+
+        if testQuadrant is not None:
+            if testQuadrant == TOP_LEFT:
+                self.minLatitude   =  -72
+                self.maxLatitude   =   -1
+                self.minLongitude  =   36
+                self.maxLongitude  =  143
+            elif testQuadrant == TOP_RIGHT:
+                self.minLatitude   =   18
+                self.maxLatitude   =   71
+                self.minLongitude  =   36
+                self.maxLongitude  =  143
+            elif testQuadrant == BOTTOM_RIGHT:
+                self.minLatitude   =   18
+                self.maxLatitude   =   71
+                self.minLongitude  = -144
+                self.maxLongitude  =   -1
+            elif testQuadrant == BOTTOM_LEFT:
+                self.minLatitude   =  -72
+                self.maxLatitude   =   -1
+                self.minLongitude  = -144
+                self.maxLongitude  =   -1
+            elif testQuadrant == LEFT_EDGE:
+                self.minLatitude   =  -90
+                self.maxLatitude   =  -90
+                self.minLongitude  = -144
+                self.maxLongitude  =  143
+            elif testQuadrant == TOP_EDGE:
+                self.minLatitude   =  -72
+                self.maxLatitude   =   71
+                self.minLongitude  =  180
+                self.maxLongitude  =  180
+            elif testQuadrant == RIGHT_EDGE:
+                self.minLatitude   =   90
+                self.maxLatitude   =   90
+                self.minLongitude  = -144
+                self.maxLongitude  =  143
+            elif testQuadrant == BOTTOM_EDGE:
+                self.minLatitude   =  -72
+                self.maxLatitude   =   71
+                self.minLongitude  = -180
+                self.maxLongitude  = -180
+            else:
+                raise Exception("Unknown Test Quadrant:", testQuadrant)
+
+#        print "XXX after X values: %d:%d Y values: %d:%d" % (self.minLatitude, self.maxLatitude,
+#                                                         self.minLongitude, self.maxLongitude)
+
     def getNext(self):
         if self.lastX is None or self.lastY is None:
-            self.lastX = randint(g_minLatitude, g_maxLatitude)
-            self.lastY = randint(g_minLongitude, g_maxLongitude)
+            self.lastX = randint(self.minLatitude, self.maxLatitude)
+            self.lastY = randint(self.minLongitude, self.maxLongitude)
             return (self.lastX, self.lastY)
         else:
             xMove = randint(-g_maxDelta, g_maxDelta)
             # cap the X new value
-            if g_minLatitude <= (self.lastX + xMove) <= g_maxLatitude:
+            if self.minLatitude <= (self.lastX + xMove) <= self.maxLatitude:
                 newX = self.lastX + xMove
-            elif g_minLatitude >= (self.lastX + xMove):
-                newX = g_minLatitude
+            elif self.minLatitude >= (self.lastX + xMove):
+                newX = self.minLatitude
             else:
-                newX = g_maxLatitude
+                newX = self.maxLatitude
 
             yMove = randint(-g_maxDelta, g_maxDelta)
             # cap the Y new value
-            if g_minLongitude <= (self.lastY + yMove) <= g_maxLongitude:
+            if self.minLongitude <= (self.lastY + yMove) <= self.maxLongitude:
                 newY = self.lastY + yMove
-            elif g_minLongitude >= (self.lastY + yMove):
-                newY = g_minLongitude
+            elif self.minLongitude >= (self.lastY + yMove):
+                newY = self.minLongitude
             else:
-                newY = g_maxLongitude
+                newY = self.maxLongitude
 
             checkLocation((newX, newY))
             return (newX, newY)

@@ -15,8 +15,8 @@ from random import randint
 from tripgrid.LocationGenerator import *
 import tripgrid.TripGrid
 
-g_debugLevel = 2
-g_tripID = 10            # trip identifier
+g_debugLevel = 1
+g_tripID = 0            # trip identifier
 g_delaySec = 1          # delay between points
 g_maxDistance = 10      # max points of travel
 g_pricePerUnit = 1      # $ / distance travelled.
@@ -27,7 +27,7 @@ class Trip(threading.Thread):
     thread, from which a random collection of points (longitude, latitude) are
     generated and sent to the database using tasks defined by the TripGrid.
     '''
-    def __init__(self):
+    def __init__(self, delay=1, testQuadrant=None):
         self.debugLevel = g_debugLevel
 
         # Threading
@@ -39,13 +39,15 @@ class Trip(threading.Thread):
         global g_tripID
         self.tripID = g_tripID
         g_tripID += 1
+        self.delay = delay
         self.fare = 0
-        self.location = LocationGenerator()
+        self.location = LocationGenerator(testQuadrant)
         self.locations = [] # local copy of trip points, for debugging
         self.previousLocation = None
 
         # Each trip will be of a randomized distance
         self.distance = randint(1, g_maxDistance)
+        # self.log(1, "XXX tripID %d distance %d" % (self.tripID, self.distance))
 
     def log(self, loglevel, *args):
         if loglevel <= self.debugLevel:
@@ -75,14 +77,17 @@ class Trip(threading.Thread):
         Start the trip thread.
         '''
         # We only allow the trip to be started once.
-        assert len(self.locations) == 0
+        assert (len(self.locations) == 0), \
+            "Trip %d is already started" % (self.tripID)
         if not self.started:
             self.log(3, "starting %d distance %d" %(self.tripID, self.distance))
             self.started = True
             nextLoc = self.location.getNext()
             self.addLocation(nextLoc)
             tripgrid.TripGrid.startTrip.delay(self.tripID, nextLoc)
-            self.start()
+
+    def ended(self):
+        return not self.started
 
     def endTrip(self):
         '''
@@ -100,19 +105,23 @@ class Trip(threading.Thread):
         '''
         Main thread method
         '''
+#        print "XXX Thread %d started" % self.tripID
         self.travel()
-        self.log(2, "trip data: %d $%d %r" % (self.tripID, self.fare, self.locations))
+        self.log(3, "trip data: %d $%d %r" % (self.tripID, self.fare, self.locations))
+#        print "XXX Thread %d ended" % self.tripID
 
     def travel(self):
         '''
         Generates random travel points for self.distance.  This could be replaced
         and driven by an external source that uses the Trip class.
         '''
+        self.startTrip()
         while self.distance > 1:
             if self.exitFlag:
                 return
-            time.sleep(g_delaySec)
+            time.sleep(self.delay)
             nextLoc = self.location.getNext()
             self.addLocation(nextLoc)
             tripgrid.TripGrid.updateTrip.delay(self.tripID, nextLoc)
         self.endTrip()
+
