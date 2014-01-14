@@ -47,7 +47,7 @@ class Trip(threading.Thread):
 
         # Each trip will be of a randomized distance
         self.distance = randint(1, g_maxDistance)
-        # self.log(1, "XXX tripID %d distance %d" % (self.tripID, self.distance))
+        self.log(3, "tripID %d distance %d" % (self.tripID, self.distance))
 
     def log(self, loglevel, *args):
         if loglevel <= self.debugLevel:
@@ -105,10 +105,8 @@ class Trip(threading.Thread):
         '''
         Main thread method
         '''
-#        print "XXX Thread %d started" % self.tripID
         self.travel()
         self.log(3, "trip data: %d $%d %r" % (self.tripID, self.fare, self.locations))
-#        print "XXX Thread %d ended" % self.tripID
 
     def travel(self):
         '''

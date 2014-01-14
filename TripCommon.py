@@ -14,7 +14,7 @@ g_numLatQueues  =   10
 g_numLongQueues =   10
 g_maxDelta      =    5 # movement from last point
 
-# XXX how do you do enum in python?
+# XXX Change to Enum if using Python 3.4
 TOP_LEFT        = 1
 TOP_RIGHT       = 2
 BOTTOM_RIGHT    = 3

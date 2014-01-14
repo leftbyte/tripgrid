@@ -29,6 +29,7 @@ def log(loglevel, *args):
 # all these params (bl, tr, type, t0, t1, withFare?
 #
 # XXX: should try passing in 'operator'
+
 def SearchLeftEdge(x, y0, y1, type, t0, t1, withFare, results):
     gridX = latitudeToGridQueue(x)
     gridY0 = longitudeToGridQueue(y0)
@@ -156,33 +157,17 @@ def QueryRect(bl, tr, type, t0, t1, withFare, results):
     trX = latitudeToGridQueue(tr[0])
     trY = longitudeToGridQueue(tr[1])
 
-    # for i in range(-90, 90, 18):
-    #     g = latitudeToGridQueue(i)
-    #     print "lat loc %d -> grid %d" %(i, g)
+    log(3, "QueryRect: bl[0] %d -> blX %d, bl[1] %d -> blY %d" % (bl[0], blX, bl[1], blY))
+    log(3, "QueryRect tr[0] %d -> trX %d, tr[1] %d -> trY %d" % (tr[0], trX, tr[1], trY))
+    log(3, "checking from X queues %d:%d Y queues %d:%d" %(blX, trX, blY, trY))
 
-    # for i in range(-180, 180, 36):
-    #     g = longitudeToGridQueue(i)
-    #     print "long loc %d -> grid %d" %(i, g)
-
-    # print "XXX bl[0] %d -> blX %d, bl[1] %d -> blY %d" % (bl[0], blX, bl[1], blY)
-    # print "XXX tr[0] %d -> trX %d, tr[1] %d -> trY %d" % (tr[0], trX, tr[1], trY)
-    # print "checking from X queues %d:%d Y queues %d:%d" %(blX, trX, blY, trY)
-
-    # We have to check the edges separately.
-    # XXX this is an edge case we need to handle
-# XXX I don't think this assert even makes sense...
-#    if blX == trX or blY == trY:
-#        print "bl[0] %d -> blX %d, bl[1] %d -> blY %d" % (bl[0], blX, bl[1], blY)
-#        print "tr[0] %d -> trX %d, tr[1] %d -> trY %d" % (tr[0], trX, tr[1], trY)
-#        raise Exception("Error: Bad grid queue indices.")
-# XXX, can't remember why we had range(blX + 1, trX) before...
     xRange = range(blX, trX + 1)
     yRange = range(blY, trY + 1)
     for x in xRange:
         for y in yRange:
             key = getTripGridKey(x, y, type)
             newtrips = r.zrangebyscore(key, t0, t1)
-            # log(1, "  XXX trips added for %r: %r" % (key, newtrips))
+            log(3, "  trips added for %r: %r" % (key, newtrips))
             if len(newtrips) == 0:
                 continue
             results['trips'] += newtrips

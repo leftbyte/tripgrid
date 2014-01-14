@@ -38,12 +38,6 @@ class LocationGenerator:
         self.minLongitude = g_minLongitude
         self.maxLongitude = g_maxLongitude
 
-#        print "XXX Quad %d, before X values: %d:%d Y values: %d:%d" % (testQuadrant,
-#                                                                   self.minLatitude,
-#                                                                   self.maxLatitude,
-#                                                                   self.minLongitude,
-#                                                                   self.maxLongitude)
-
         if testQuadrant is not None:
             if testQuadrant == TOP_LEFT:
                 self.minLatitude   =  -72
@@ -87,9 +81,6 @@ class LocationGenerator:
                 self.maxLongitude  = -180
             else:
                 raise Exception("Unknown Test Quadrant:", testQuadrant)
-
-#        print "XXX after X values: %d:%d Y values: %d:%d" % (self.minLatitude, self.maxLatitude,
-#                                                         self.minLongitude, self.maxLongitude)
 
     def getNext(self):
         if self.lastX is None or self.lastY is None:
