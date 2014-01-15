@@ -1,22 +1,56 @@
-To run, you'll need three consoles:
+tripgrid: A module to simulate trips and record their updates that provide the
+ability to query data in Log(N) time.  The TripQuery module provides the API to
+query the database for trip information.
 
+dependencies:
+- python 2.7
 - rabbitmq
 - celery
 - redis
-- python
 
-- start rabbbitmq
-> sudo rabbitmq-server
+To run the simulator and some queries:
 
-- start the redis server
-> redis-server
+  - start rabbbitmq
+    > sudo rabbitmq-server
 
-- start celery app
-> celery worker --app=tripgrid -l info
+  - start the redis server
+    > redis-server
 
-- start the simulator
-> python
->>> import tripgrid.simulator
->>> tripgrid.simulator.main()
+  - start celery app
+    > celery worker --app=tripgrid -l error
 
-- query some information
+  - start the simulator
+    > python
+    >>> import sys, tripgrid.simulator
+    >>> tripgrid.simulator.main()
+
+  Let the simulator run for a while and run some queries:
+  # all trips
+  python tripgrid/TripQuery.py -a --bl -90,-180 --tr 90,180
+
+  # trips that started in grid
+  python tripgrid/TripQuery.py -s --bl -90,-180 --tr 90,180
+
+  # trips that ended in grid
+  python tripgrid/TripQuery.py -e --bl -90,-180 --tr 90,180
+
+  # trips that ran between these times
+  python tripgrid/TripQuery.py -t --t0 '2014-01-14 15:09:00' --t1 "15:10:00"
+
+  # trips that ran between these times and ended in this grid
+  python tripgrid/TripQuery.py -t --t0 '2014-01-14 15:09:00' --t1 "15:10:00" -e --bl 0,0 --tr 90,180
+
+Testing:
+  - start rabbbitmq
+    > sudo rabbitmq-server
+
+  - start the redis server
+    > redis-server
+
+  - start celery app
+    > celery worker --app=tripgrid -l error
+
+  - start test driver
+    > python
+    >>> import sys, tripgrid.drivetest
+    >>> tripgrid.drivetest.main()
