@@ -6,7 +6,8 @@
 #    Module for generating psuedo "longitude" and "latitude" data pairs.
 #
 #    XXX: change to actual latitude/longitude points.
-#    Actually, it just generates points between the max/min long/lat values, at
+#    XXX: import actual city map and snap to intersections.
+#    This module generates points between the max/min long/lat values, at
 #    integer increments.  We probably want to generate something to 4 decimal
 #    points (scale of meters).
 #

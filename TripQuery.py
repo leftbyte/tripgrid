@@ -8,6 +8,8 @@
 
 import sys
 import getopt
+import time
+import datetime
 import redis
 from TripCommon import *
 
@@ -216,7 +218,34 @@ def TripsAtTime(t0, t1, withFare, results):
     '''
     Query how many trips were occurring at a given point in time.
     '''
-    return QueryRect((-90, -180), (79, 179), "ALL", t0, t1, withFare, results)
+    return QueryRect((-90, -180), (90, 180), "ALL", t0, t1, withFare, results)
+
+def printAllTrips(r):
+    trips = r.smembers("tripIDs")
+    trips = [int(x) for x in trips]
+    for t in sorted(trips):
+        locations = r.zrange("tripQueue:%s:locations" % t, 0, -1)
+        print "tripID %s: %d %r" % (t, len(locations), locations)
+
+def timeArgToEpochSec(timearg):
+    '''
+    Convert a date/time argument (E.g. '2014-01-14 03:14:15') to the seconds
+    since the epoch.
+    '''
+    (date0, time0) = (None, None)
+
+    # If the user specifies a time, if only one token is specified we assume
+    # it's the time.
+    if len(timearg.split()) != 2:
+        date0 = time.strftime("%Y-%m-%d", time.gmtime())
+        time0 = timearg
+    else:
+        (date0, time0) = timearg.split()
+
+    d = datetime.datetime.strptime(date0 + ' ' + time0, "%Y-%m-%d %H:%M:%S")
+    t = time.mktime(d.timetuple())
+    return t
+
 
 def usage():
     print '  usage: TripQuery.py opts'
@@ -230,7 +259,8 @@ def usage():
     print ''
     print '  examples:'
     print '       TripQuery.py -a --bl 5,5 --tr 7,8'
-    print '       TripQuery.py -t --time ???'
+    print '       TripQuery.py -t --t0 "15:09:00" --t1 "15:10:00"'
+    print ''
 
 def main(argv):
     queryRectAll = False
@@ -267,9 +297,9 @@ def main(argv):
         elif opt in ("--tr"):
             tr = [int(n) for n in arg.split(',')]
         elif opt in ("--t0"):
-            t0 = float(arg)
+            t0 = timeArgToEpochSec(arg)
         elif opt in ("--t1"):
-            t1 = float(arg)
+            t1 = timeArgToEpochSec(arg)
 
     # Sanity check some combinations
     if queryRectAll or queryRectStart or queryRectEnd:
@@ -292,24 +322,44 @@ def main(argv):
         if t0 is None or t1 is None:
             print "Error: option t requires t0 and t1 to be specified."
             sys.exit(2)
-    elif t0 is not None or t1 is not None:
+    elif t0 is not "-inf" or t1 is not "inf":
         print "Warning: t0 or t1 is specified without 't' being specified."
 
-    # XXX: currently I'm leaving this open to compound queries, like
-    # if they specify a time and a rect, we should find how many trips
-    # went through that rect at that time.
+    rectQueries = 0
+    if queryRectAll:
+        rectQueries += 1
+    if queryRectStart:
+        rectQueries += 1
+    if queryRectEnd:
+        rectQueries += 1
+    if rectQueries > 1:
+        print "Error: only one rect query (start, end, all) allowed per query."
+        sys.exit(2)
+
+    results = {
+        'trips': [],
+        'fare': 0,
+        }
 
     if queryRectAll:
-        TripsGoingThroughRect(bl, tr, t0, t1, withFare, resultsDict)
+        TripsGoingThroughRect(bl, tr, t0, t1, withFare, results)
+        print "numTrips %d" % (len(results['trips']),)
 
-    if queryRectStart:
-        TripsStartedInRect(bl, tr, t0, t1, withFare, resultsDict)
+    elif queryRectStart:
+        TripsStartedInRect(bl, tr, t0, t1, withFare, results)
+        print "numTrips %d" % (len(results['trips']),)
 
-    if queryRectEnd:
-        TripsEndedInRect(bl, tr, t0, t1, True, resultsDict)
+    elif queryRectEnd:
+        TripsEndedInRect(bl, tr, t0, t1, True, results)
+        print "numTrips %d fare %d" % (len(results['trips']), results['fare'])
 
-    if queryTime:
-        TripsAtTime(t0, t1, withFare, resultsDict)
+    elif queryTime:
+        TripsAtTime(t0, t1, withFare, results)
+        print "numTrips %d" % (len(results['trips']),)
+
+    else:
+        usage()
+        sys.exit(2)
 
 if __name__ == "__main__":
     main(sys.argv[1:])

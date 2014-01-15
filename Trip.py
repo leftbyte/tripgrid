@@ -47,6 +47,7 @@ class Trip(threading.Thread):
 
         # Each trip will be of a randomized distance
         self.distance = randint(1, g_maxDistance)
+        self.totalDistance = self.distance
         self.log(3, "tripID %d distance %d" % (self.tripID, self.distance))
 
     def log(self, loglevel, *args):
@@ -55,6 +56,9 @@ class Trip(threading.Thread):
 
     def getTripID(self):
         return self.tripID
+
+    def getTotalDistance(self):
+        return self.totalDistance
 
     def addFare(self, newLocation):
         # we calculate fare as each x and y unit moved.
