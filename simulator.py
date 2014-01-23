@@ -11,7 +11,7 @@ import time
 import redis
 from tripgrid.Trip import *
 
-g_resetDB = FALSE
+g_resetDB = True
 g_debugLevel = 1
 
 def initRedis():
